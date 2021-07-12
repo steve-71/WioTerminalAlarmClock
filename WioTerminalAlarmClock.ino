@@ -1,12 +1,15 @@
 #include <rpcWiFi.h> // see https://github.com/Seeed-Studio/Seeed_Arduino_rpcWiFi
 #include <millisDelay.h> // see https://github.com/ansonhe97/millisDelay
 #include "RTC_SAMD51.h" // see https://github.com/Seeed-Studio/Seeed_Arduino_RTC
+#include <Seeed_FS.h> // see https://github.com/Seeed-Studio/Seeed_Arduino_FS 
+#include "SD/Seeed_SD.h"
 
 // based on the examples at https://wiki.seeedstudio.com/Wio-Terminal-Wi-Fi/
 
-// insert your SSID/PSK here:
-const char ssid[] = "SSID";
-const char password[] = "PSK";
+// define variables to store the WiFi SSID and PSK:
+char ssid[33];
+char password[255];
+// these will be loaded from "WiFi.txt" on the SD card
 
 millisDelay updateDelay; // the update delay object. used for ntp periodic update.
 millisDelay serialDelay; // the serial delay object. used for updates to the serial port.
@@ -85,19 +88,26 @@ void setup() {
 
   // check if rtc present; should never happen unless on wrong hardware
   if (!rtc.begin()) {
-    while (true) {
-      Serial.println(F("Couldn't find RTC; FATAL; Halted Operation"));
-      tft.setCursor(5, 105);
-      tft.println(F("Couldn't find RTC; FATAL"));
-      tft.setCursor(5, 125);
-      tft.println(F("Halted Operation"));
-      delay(10000); // stop operating
-    }
+    haltMessage("FATAL: No RTC!");
   }
 
   // get and print the current rtc time
   Serial.print("RTC time is: ");
   sendTimeViaSerial();
+
+  Serial.print("Initializing SD card...");
+  if (!SD.begin(SDCARD_SS_PIN, SDCARD_SPI)) {
+    haltMessage("SD Card init Failed!");
+  }
+  Serial.println("initialization done.");
+
+  // get the WiFi details from the SD card
+  if (!loadWiFiDetails()) {
+    haltMessage("loadWiFiDetails Failed");
+  }
+
+  // only use the SD card to load up data, done;
+  SD.end();
 
   // setup network before rtc check
   connectToWiFi(ssid, password);
@@ -131,9 +141,9 @@ void setup() {
 
   serialDelay.start(60 * 1000);
 
-  displayDelay.start(250);
-
   tft.fillScreen(TFT_BLACK);
+
+  displayDelay.start(10);
 }
 
 void loop() {
@@ -183,8 +193,8 @@ void loop() {
   }
 
   if (displayDelay.justFinished()) {
-    displayDelay.repeat();
     drawTime();
+    displayDelay.repeat();
   }
 }
 
@@ -363,7 +373,6 @@ void WiFiEvent(WiFiEvent_t event)
       eventText = "Authentication mode of access point has changed";
       break;
     case SYSTEM_EVENT_STA_GOT_IP:
-      //      eventText = "Obtained IP address: " + WiFi.localIP();
       eventText = "Obtained IP address";
       break;
     case SYSTEM_EVENT_STA_LOST_IP:
@@ -490,5 +499,48 @@ void drawTime() {
       xpos += tft.drawChar('0', xpos, ysecs, 6);    // Add leading zero
     }
     tft.drawNumber(ss, xpos, ysecs, 6);                     // Draw seconds
+  }
+}
+
+bool loadWiFiDetails() {
+  File myFile = SD.open("/WiFi.txt", FILE_READ);
+  int buff = 0;
+  if (myFile) {
+    for (int i = 0; i < 33; i++) {
+      if (myFile.available()) {
+        buff = myFile.read();
+        if (buff != ',') {
+          ssid[i] = buff;
+        } else {
+          for (int j = i; j < 33; j++) {
+            ssid[j] = 0;
+          }
+          break;
+        }
+      }
+    }
+    // now the password
+    for (int i = 0; i < 256; i++) {
+      if (myFile.available()) {
+        buff = myFile.read();
+        password[i] = buff;
+      } else {
+        password[i] = 0;
+      }
+    }
+  }
+
+  return (ssid[0] != 0 && password[0] != 0);
+}
+
+void haltMessage(char* message) {
+  // display a message and stop operating
+  while (true) {
+    Serial.println(message);
+    tft.setCursor(5, 105);
+    tft.println(message);
+    tft.setCursor(5, 125);
+    tft.println(F("Halted Operation"));
+    delay(10000);
   }
 }
