@@ -17,10 +17,10 @@ The aim is to have a little alarm-clock with multiple alarms that will be useful
 ## Progress so far:
  - uses serial to send status, mostly for debugging purposes, with a 30 second timeout to connect on power-up
  - displays the configuration progress on the TFT
- - gets the SSID and PSK from file WiFi.txt on SD card
+ - gets the SSID and PSK from file WiFi.json on SD card
  - connects to a WiFi network
  - requests the time using NTP
- - displays the NTP synch status (Synchronised, Corrected, etc)
+ - displays the NTP synch status (Failed, Synchronised, Corrected)
  - displays the time (in UTC)
 
 ## To Do:
