@@ -1,3 +1,5 @@
+#include <StreamLib.h> // 
+#include <ArduinoJson.h> // see https://arduinojson.org/
 #include <rpcWiFi.h> // see https://github.com/Seeed-Studio/Seeed_Arduino_rpcWiFi
 #include <millisDelay.h> // see https://github.com/ansonhe97/millisDelay
 #include "RTC_SAMD51.h" // see https://github.com/Seeed-Studio/Seeed_Arduino_RTC
@@ -9,7 +11,9 @@
 // define variables to store the WiFi SSID and PSK:
 char ssid[33];
 char password[255];
-// these will be loaded from "WiFi.txt" on the SD card
+// these will be loaded from "WiFi.json" on the SD card
+// the expected content of the WiFi.json is:
+// {"ssid":"myWiFiSSID","psk":"myPassword"}
 
 millisDelay updateDelay; // the update delay object. used for ntp periodic update.
 millisDelay serialDelay; // the serial delay object. used for updates to the serial port.
@@ -193,8 +197,8 @@ void loop() {
   }
 
   if (displayDelay.justFinished()) {
-    drawTime();
     displayDelay.repeat();
+    drawTime();
   }
 }
 
@@ -503,33 +507,37 @@ void drawTime() {
 }
 
 bool loadWiFiDetails() {
-  File myFile = SD.open("/WiFi.txt", FILE_READ);
-  int buff = 0;
-  if (myFile) {
-    for (int i = 0; i < 33; i++) {
-      if (myFile.available()) {
-        buff = myFile.read();
-        if (buff != ',') {
-          ssid[i] = buff;
-        } else {
-          for (int j = i; j < 33; j++) {
-            ssid[j] = 0;
-          }
-          break;
-        }
-      }
+  File myFile = SD.open("/WiFi.json", FILE_READ);
+  DynamicJsonDocument doc(1024);
+  DeserializationError err = deserializeJson(doc, myFile);
+  myFile.close();
+  if (err) {
+    Serial.print(F("deserializeJson() failed with code "));
+    Serial.println(err.c_str());
+  } else {
+    // Get a reference to the root object
+    JsonObject obj = doc.as<JsonObject>();
+
+    const char* id = obj["ssid"];
+    // Is there an error after all?
+    if (id != nullptr) {
+      Serial.print("SSID=");
+      Serial.println(id);
+      strcpy(ssid, id);
+    } else {
+      Serial.println("SSID not found");
     }
-    // now the password
-    for (int i = 0; i < 256; i++) {
-      if (myFile.available()) {
-        buff = myFile.read();
-        password[i] = buff;
-      } else {
-        password[i] = 0;
-      }
+
+    const char* pwd = obj["psk"];
+    // Is there an error after all?
+    if (pwd != nullptr) {
+      Serial.print("PSK=");
+      Serial.println(pwd);
+      strcpy(password, pwd);
+    } else {
+      Serial.println("PSK not found");
     }
   }
-
   return (ssid[0] != 0 && password[0] != 0);
 }
 
