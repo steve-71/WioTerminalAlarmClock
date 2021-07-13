@@ -113,41 +113,8 @@ void setup() {
   // only use the SD card to load up data, done;
   SD.end();
 
-  // setup network before rtc check
-  connectToWiFi(ssid, password);
-
-  // get the time via NTP (udp) call to time server
-  // getNTPtime returns epoch UTC time
-  // if required adjust for timezone and daylight savings time
-  // To store the time returned by the NTP server
-  unsigned long devicetime = getNTPtime(timeServer);
-  if (devicetime == 0) {
-    Serial.print("Failed to get time from network time server:");
-    Serial.println(timeServer);
-    // start millisdelays timers as required
-    updateDelay.start(DelayShort);
-  } else {
-    // adjust time using ntp time
-    rtc.adjust(DateTime(devicetime));
-    // print boot update details
-    Serial.println("RTC (boot) time updated.");
-    // get and print the adjusted rtc time
-    Serial.print("Adjusted RTC (boot) time is: ");
-    sendTimeViaSerial();
-    // record last synch time:
-    lastSynchTime = DateTime(devicetime);
-    // start millisdelays timers
-    updateDelay.start(DelayShort);
-  }
-
-  // not calling ntp time frequently, stop releases resources
-  udp.stop();
-
   serialDelay.start(60 * 1000);
-
-  tft.fillScreen(TFT_BLACK);
-
-  displayDelay.start(10);
+  updateDelay.start(10);
 }
 
 void loop() {
@@ -160,6 +127,7 @@ void loop() {
 
     tft.setTextSize(2);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.fillScreen(TFT_BLACK);
     // To store the time returned by the NTP server
     unsigned long devicetime = getNTPtime(timeServer);
     if (devicetime == 0) {
@@ -168,6 +136,8 @@ void loop() {
       updateDelay.start(DelayShort);
     }
     else {
+      // record last synch time:
+      lastSynchTime = DateTime(devicetime);
       DateTime previousTime = rtc.now();
       rtc.adjust(DateTime(devicetime));
       Serial.print("rtc time updated; was:");
@@ -189,6 +159,7 @@ void loop() {
     }
     // not calling ntp time frequently, stop releases resources
     udp.stop();
+    displayDelay.start(10);
   }
 
   if (serialDelay.justFinished()) {
@@ -511,6 +482,7 @@ bool loadWiFiDetails() {
   DynamicJsonDocument doc(1024);
   DeserializationError err = deserializeJson(doc, myFile);
   myFile.close();
+  // Is there an error after all?
   if (err) {
     Serial.print(F("deserializeJson() failed with code "));
     Serial.println(err.c_str());
@@ -519,7 +491,6 @@ bool loadWiFiDetails() {
     JsonObject obj = doc.as<JsonObject>();
 
     const char* id = obj["ssid"];
-    // Is there an error after all?
     if (id != nullptr) {
       Serial.print("SSID=");
       Serial.println(id);
