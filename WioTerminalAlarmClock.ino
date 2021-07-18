@@ -22,7 +22,10 @@ millisDelay displayDelay; // the display delay object. used for updating the dis
 const unsigned long DelayNormal = 60 * 60 * 1000;
 const unsigned long DelayShort = 5 * 60 * 1000;
 const unsigned long DelayLong = 8 * 60 * 60 * 1000;
-
+unsigned int synchCount = 0;
+const unsigned int SynchCountNormal = 2;
+const unsigned int SynchCountLong = SynchCountNormal + 3;
+const unsigned int SynchCountReset = SynchCountLong + 5;
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 //char timeServer[] = "time.nist.gov"; // external NTP server e.g. time.nist.gov
 char timeServer[] = "0.uk.pool.ntp.org";
@@ -61,7 +64,7 @@ void setup() {
   tft.setRotation(3);
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-
+  tft.setTextDatum(TL_DATUM);
   tft.setTextSize(2);
   tft.setCursor(35, 25);
   tft.println(F("WioTerminal"));
@@ -127,34 +130,30 @@ void loop() {
 
     tft.setTextSize(2);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setTextDatum(TL_DATUM);
     tft.fillScreen(TFT_BLACK);
-    // To store the time returned by the NTP server
-    unsigned long devicetime = getNTPtime(timeServer);
-    if (devicetime == 0) {
+
+    if (!synchRTCtoNTPtime(timeServer)) {
       Serial.println("Failed to get time from network time server.");
-      tft.drawString("NTP GET FAILED", 10, 10);
+      tft.drawString("NTP SYNCH FAILED", 10, 10);
+      synchCount = 0;
       updateDelay.start(DelayShort);
     }
     else {
-      // record last synch time:
-      lastSynchTime = DateTime(devicetime);
-      DateTime previousTime = rtc.now();
-      rtc.adjust(DateTime(devicetime));
-      Serial.print("rtc time updated; was:");
-      Serial.print(previousTime.timestamp(DateTime::TIMESTAMP_FULL));
-      Serial.print(", now:");
-      Serial.println(DateTime(devicetime).timestamp(DateTime::TIMESTAMP_FULL));
-
-      // repeat timer
-      if (previousTime.timestamp(DateTime::TIMESTAMP_FULL) == DateTime(devicetime).timestamp(DateTime::TIMESTAMP_FULL))
-      {
-        updateDelay.start(DelayLong);
-        tft.drawString("NTP SYNCHRONISED", 10, 10);
+      // repeat timer vlaue depends on how many successfull synchs we've had in a row
+      if (++synchCount >= SynchCountReset) {
+        synchCount = 0;
       }
-      else
-      {
+
+      if (synchCount >= SynchCountLong) {
+        updateDelay.start(DelayLong);
+        tft.drawString("NTP SYNCH Long", 10, 10);
+      } else if (synchCount >= SynchCountNormal) {
         updateDelay.start(DelayNormal);
-        tft.drawString("NTP CORRECTED", 10, 10);
+        tft.drawString("NTP SYNCH Norm", 10, 10);
+      } else {
+        updateDelay.start(DelayShort);
+        tft.drawString("NTP SYNCH Short", 10, 10);
       }
     }
     // not calling ntp time frequently, stop releases resources
@@ -206,7 +205,7 @@ void connectToWiFi(const char* ssid, const char* pwd) {
   printWiFiStatus();
 }
 
-unsigned long getNTPtime(const char* address) {
+bool synchRTCtoNTPtime(const char* address) {
   // module returns a unsigned long time value as seconds since
   // Jan 1, 1970 unix time or 0 if a problem encounted
 
@@ -262,32 +261,54 @@ unsigned long getNTPtime(const char* address) {
       // this is NTP time (seconds since Jan 1 1900):
       unsigned long secsSince1900 = highWord << 16 | lowWord;
       // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-      const unsigned long seventyYears = 2208988800UL;
-      // subtract seventy years:
-      unsigned long epoch = secsSince1900 - seventyYears;
+      //      const unsigned long seventyYears = 2208988800UL;
+      // BUT we are going to wait for the next second, so take off one second less:
+      const unsigned long seventyYearsLessOneSecond = 2208988799UL;
+      // subtract seventy years (less one second):
+      unsigned long epoch = secsSince1900 - seventyYearsLessOneSecond;
 
-      return epoch;
+      //      return epoch; - don't return, we will set the RTC in here now
 
-      // adjust time for timezone offset in secs +/- from UTC
-      // WA time offset from UTC is +8 hours (28,800 secs)
-      // + East of GMT
-      // - West of GMT
-      long tzOffset = 28800UL;
+      // note that this epoch is in whole seconds;
+      // need to convert the fractional seconds to milliseconds, see answer to
+      // https://arduino.stackexchange.com/questions/49567/synching-local-clock-usign-ntp-to-milliseconds
+      // also see
+      // https://forum.arduino.cc/t/heres-how-to-get-a-more-accurate-rtc-clock-set-from-an-ntp-time-server/506179
+      // which has the plan of waiting until the next whole second, then setting the time on the RTC \o/
 
-      // WA local time
-      unsigned long adjustedTime;
-      return adjustedTime = epoch + tzOffset;
+      // Now get the fractional part
+      uint32_t NTPmillis = (packetBuffer[44] << 24) | (packetBuffer[45] << 16) | (packetBuffer[46] << 8) | packetBuffer[47];
+
+      // Get the fractional part to delay to the next whole second as milliseconds
+      int32_t fractionalPart = 1000 - (int32_t)(((float)NTPmillis / UINT32_MAX) * 1000);
+
+      if (fractionalPart > 0) {
+        // Burn off the remaining fractional part of the existing second
+        delay(fractionalPart);
+      }
+
+      // record last synch time:
+      lastSynchTime = DateTime(epoch);
+      DateTime previousTime = rtc.now();
+      rtc.adjust(lastSynchTime);
+
+      Serial.print("rtc time updated; was:");
+      Serial.print(previousTime.timestamp(DateTime::TIMESTAMP_FULL));
+      Serial.print(", now:");
+      Serial.println(lastSynchTime.timestamp(DateTime::TIMESTAMP_FULL));
+      Serial.print("milliseconds delay was:");
+      Serial.println(fractionalPart);
     }
     else {
       // were not able to parse the udp packet successfully
       // clear down the udp connection
       udp.stop();
-      return 0; // zero indicates a failure
+      return false;
     }
   }
   else {
     // network not connected
-    return 0;
+    return false;
   }
 }
 
