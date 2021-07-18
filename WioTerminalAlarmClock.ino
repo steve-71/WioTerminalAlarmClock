@@ -118,6 +118,7 @@ void setup() {
 
   serialDelay.start(60 * 1000);
   updateDelay.start(10);
+  tft.fillScreen(TFT_BLACK);
 }
 
 void loop() {
@@ -131,7 +132,7 @@ void loop() {
     tft.setTextSize(2);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.setTextDatum(TL_DATUM);
-    tft.fillScreen(TFT_BLACK);
+    tft.drawString("NTP SYNCH ...", 10, 10);
 
     if (!synchRTCtoNTPtime(timeServer)) {
       Serial.println("Failed to get time from network time server.");
@@ -147,13 +148,13 @@ void loop() {
 
       if (synchCount >= SynchCountLong) {
         updateDelay.start(DelayLong);
-        tft.drawString("NTP SYNCH Long", 10, 10);
+        tft.drawString("NTP SYNCH GOOD", 10, 10);
       } else if (synchCount >= SynchCountNormal) {
         updateDelay.start(DelayNormal);
-        tft.drawString("NTP SYNCH Norm", 10, 10);
+        tft.drawString("NTP SYNCH OKAY", 10, 10);
       } else {
         updateDelay.start(DelayShort);
-        tft.drawString("NTP SYNCH Short", 10, 10);
+        tft.drawString("NTP SYNCH DONE", 10, 10);
       }
     }
     // not calling ntp time frequently, stop releases resources
@@ -298,6 +299,8 @@ bool synchRTCtoNTPtime(const char* address) {
       Serial.println(lastSynchTime.timestamp(DateTime::TIMESTAMP_FULL));
       Serial.print("milliseconds delay was:");
       Serial.println(fractionalPart);
+
+      return true;
     }
     else {
       // were not able to parse the udp packet successfully
@@ -343,8 +346,9 @@ void WiFiEvent(WiFiEvent_t event)
   tft.setTextSize(2);
   eventText = "[WiFi-event] event: " + String(event);
   Serial.println(eventText);
-  tft.fillRect(0, 0, 320, 20, TFT_BLACK);
-  tft.drawString(eventText, 160, 10);
+  //  tft.fillRect(0, 0, 320, 20, TFT_BLACK);
+  tft.fillRect(0, 200, 320, 40, TFT_BLACK);
+  tft.drawString(eventText, 160, 200);
 
   switch (event) {
     case SYSTEM_EVENT_WIFI_READY:
@@ -425,7 +429,7 @@ void WiFiEvent(WiFiEvent_t event)
     default: break;
   }
   Serial.println(eventText);
-  tft.fillRect(0, 220, 320, 40, TFT_BLACK);
+  //  tft.fillRect(0, 220, 320, 40, TFT_BLACK);
   tft.drawString(eventText, 160, 220);
 }
 
