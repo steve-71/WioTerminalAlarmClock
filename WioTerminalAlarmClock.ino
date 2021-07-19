@@ -134,11 +134,12 @@ void loop() {
     tft.setTextSize(2);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.setTextDatum(TL_DATUM);
-    tft.drawString("NTP SYNCH ...", 10, 10);
+    tft.fillRect(0, 0, 320, 40, TFT_BLACK);
+    tft.drawString("NTP SYNCH ... ", 10, 10);
 
     if (!synchRTCtoNTPtime(timeServer)) {
       Serial.println("Failed to get time from network time server.");
-      tft.drawString("NTP SYNCH FAILED", 10, 10);
+      tft.drawString("NTP SYNCH FAILED ", 10, 10);
       synchCount = 0;
       updateDelay.start(DelayShort);
     }
@@ -150,13 +151,13 @@ void loop() {
 
       if (synchCount >= SynchCountLong) {
         updateDelay.start(DelayLong);
-        tft.drawString("NTP SYNCH GOOD", 10, 10);
+        tft.drawString("NTP SYNCH GOOD ", 10, 10);
       } else if (synchCount >= SynchCountNormal) {
         updateDelay.start(DelayNormal);
-        tft.drawString("NTP SYNCH OKAY", 10, 10);
+        tft.drawString("NTP SYNCH OKAY ", 10, 10);
       } else {
         updateDelay.start(DelayShort);
-        tft.drawString("NTP SYNCH DONE", 10, 10);
+        tft.drawString("NTP SYNCH DONE ", 10, 10);
       }
     }
     // not calling ntp time frequently, stop releases resources
@@ -197,10 +198,18 @@ void connectToWiFi(const char* ssid, const char* pwd) {
   millisDelay wifiDelay;
   wifiDelay.start(500);
 
+  const int MaxRetry = 10;
+  int retry = 0;
   while (WiFi.status() != WL_CONNECTED) {
     if (wifiDelay.justFinished()) {
-      WiFi.begin(ssid, pwd);
-      wifiDelay.restart();
+      if (retry++ < MaxRetry) {
+        WiFi.begin(ssid, pwd);
+        wifiDelay.restart();
+      } else {
+        Serial.println("WIFI max retry exceeded - quitting");
+        WiFi.disconnect(true);
+        return;
+      }
     }
   }
 
@@ -369,16 +378,16 @@ void WiFiEvent(WiFiEvent_t event)
       eventText = "Connected to access point";
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
-      eventText = "Disconnected from WiFi access point";
+      eventText = "Disconnected from WiFi AP";
       break;
     case SYSTEM_EVENT_STA_AUTHMODE_CHANGE:
-      eventText = "Authentication mode of access point has changed";
+      eventText = "Authentication mode changed";
       break;
     case SYSTEM_EVENT_STA_GOT_IP:
       eventText = "Obtained IP address";
       break;
     case SYSTEM_EVENT_STA_LOST_IP:
-      eventText = "Lost IP address and IP address is reset to 0";
+      eventText = "Lost IP address"; // and IP address is reset to 0";
       break;
     case SYSTEM_EVENT_STA_WPS_ER_SUCCESS:
       eventText = "WiFi Protected Setup (WPS): succeeded in enrollee mode";
