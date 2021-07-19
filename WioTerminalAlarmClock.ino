@@ -27,10 +27,9 @@ const unsigned int SynchCountNormal = 2;
 const unsigned int SynchCountLong = SynchCountNormal + 3;
 const unsigned int SynchCountReset = SynchCountLong + 5;
 unsigned int localPort = 2390;      // local port to listen for UDP packets
-//char timeServer[] = "time.nist.gov"; // external NTP server e.g. time.nist.gov
-char timeServer[] = "0.uk.pool.ntp.org";
-//char timeServer[] = "85.199.214.101";
-//char timeServer[] = "1.ntp.talktalk.net";
+
+const char defaultServer[] = "0.uk.pool.ntp.org";
+char timeServer[128]; // stores the url/IP address of the external NTP server
 const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 
@@ -112,6 +111,9 @@ void setup() {
   if (!loadWiFiDetails()) {
     haltMessage("loadWiFiDetails Failed");
   }
+
+  // get the NTP Server details from the SD card
+  loadNTPserver();
 
   // only use the SD card to load up data, done;
   SD.end();
@@ -535,6 +537,25 @@ bool loadWiFiDetails() {
     }
   }
   return (ssid[0] != 0 && password[0] != 0);
+}
+
+void loadNTPserver() {
+  File myFile = SD.open("/NTPserver.json", FILE_READ);
+  StaticJsonDocument<256> doc;
+  DeserializationError error = deserializeJson(doc, myFile);
+  myFile.close();
+
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    Serial.println(F("using default NTP server"));
+    strlcpy(timeServer, defaultServer, 128);
+  } else {
+    // Copy the supplied server name or use the default if it's not specified
+    strlcpy(timeServer, doc["server"] | defaultServer, 128);
+    Serial.print(F("using time server: "));
+    Serial.println(timeServer);
+  }
 }
 
 void haltMessage(char* message) {
