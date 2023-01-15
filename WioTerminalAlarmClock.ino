@@ -482,7 +482,7 @@ void alarmMatch(uint32_t flag) {
 
 // Draw the time on the display
 void drawTime() {
-  static byte omm = 99, oss = 99;
+  static  byte omm = 99, oss = 99;
   static byte xcolon = 0, xsecs = 0;
 
   tft.setTextSize(1);

@@ -15,12 +15,15 @@ The aim is to have a little alarm-clock with multiple alarms that will be useful
  - at each alarm time make a buzz and give an output signal suitable for PA or Tannoy
 
 ## Progress so far:
- - uses serial to send status, mostly for debugging purposes, with a 10 second timeout to connect on power-up
+ - uses serial to send status, mostly for debugging purposes, with a 30 second timeout to connect on power-up
+ - displays the configuration progress on the TFT
+ - gets the SSID and PSK from file WiFi.json on SD card
  - connects to a WiFi network
  - requests the time using NTP
+ - displays the NTP synch status (Failed, Synchronised, Corrected)
  - displays the time (in UTC)
 
 ## To Do:
- - display status
+ - get local timezone and DST settings from SD card
  - display local time
  - implement alarms
