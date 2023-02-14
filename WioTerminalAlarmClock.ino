@@ -144,34 +144,41 @@ void loop() {
     }
 
     tft.setTextSize(2);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.setTextDatum(TL_DATUM);
     tft.fillRect(0, 0, 320, 40, TFT_BLACK);
-    tft.drawString("NTP SYNCH ... ", 10, 10);
 
-    if (!synchRTCtoNTPtime(timeServer)) {
-      Serial.println("Failed to get time from network time server.");
-      tft.setTextColor(TFT_RED, TFT_BLACK);
-      tft.drawString("NTP SYNCH FAILED ", 10, 10);
-      synchCount = 0;
-      updateDelay.start(DelayShort);
+    if (WiFi.status() != WL_CONNECTED) {
+      updateDelay.start(DelayLong);
+      tft.setTextColor(TFT_PINK, TFT_BLACK);
+      tft.drawString("WiFi SSID LOST ", 10, 10);
     } else {
-      // repeat timer value depends on how many successfull synchs we've had in a row
-      if (++synchCount >= SynchCountReset) {
-        synchCount = 0;
-      }
+      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      tft.drawString("NTP SYNCH ... ", 10, 10);
 
-      if (synchCount >= SynchCountLong) {
-        updateDelay.start(DelayLong);
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.drawString("NTP SYNCH GOOD ", 10, 10);
-      } else if (synchCount >= SynchCountNormal) {
-        updateDelay.start(DelayNormal);
-        tft.setTextColor(TFT_BLUE, TFT_BLACK);
-        tft.drawString("NTP SYNCH OKAY ", 10, 10);
-      } else {
+      if (!synchRTCtoNTPtime(timeServer)) {
+        Serial.println("Failed to get time from network time server.");
+        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.drawString("NTP SYNCH FAILED ", 10, 10);
+        synchCount = 0;
         updateDelay.start(DelayShort);
-        tft.drawString("NTP SYNCH DONE ", 10, 10);
+      } else {
+        // repeat timer value depends on how many successfull synchs we've had in a row
+        if (++synchCount >= SynchCountReset) {
+          synchCount = 0;
+        }
+
+        if (synchCount >= SynchCountLong) {
+          updateDelay.start(DelayLong);
+          tft.setTextColor(TFT_GREEN, TFT_BLACK);
+          tft.drawString("NTP SYNCH GOOD ", 10, 10);
+        } else if (synchCount >= SynchCountNormal) {
+          updateDelay.start(DelayNormal);
+          tft.setTextColor(TFT_BLUE, TFT_BLACK);
+          tft.drawString("NTP SYNCH OKAY ", 10, 10);
+        } else {
+          updateDelay.start(DelayShort);
+          tft.drawString("NTP SYNCH DONE ", 10, 10);
+        }
       }
     }
     // not calling ntp time frequently, stop releases resources
